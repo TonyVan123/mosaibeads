@@ -1,0 +1,11 @@
+{
+  "name": "BeadSketch Semantic Model Pack",
+  "version": "2.0.0",
+  "architecture": "torchvision MobileNetV3-Small feature trunk",
+  "input": "RGB NCHW float32 224x224, ImageNet normalization",
+  "output": "576-dimensional feature vector",
+  "model_file": "semantic_encoder.onnx",
+  "model_size": 3717007,
+  "sha256": "f405388cb07a6eaaa439dcb5d384d48a5c758c9a48e4a5b6a945cfa4363479a5",
+  "runtime_priority": ["CUDAExecutionProvider", "CPUExecutionProvider", "OpenCV DNN CPU"]
+}

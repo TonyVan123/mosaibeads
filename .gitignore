@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Local environments (the optional CUDA model runtime is about 3 GB)
+.venv/
+venv/
+model_pack/.venv/
+
+# Build output
+build/
+dist/
+*.log
+
+# Local QA and generated preview images
+comparison*.png
+latest_*.png
+test_*.png
+thin_line*.png
+ui_*.png
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
