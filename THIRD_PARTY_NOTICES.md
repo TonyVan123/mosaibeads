@@ -14,7 +14,7 @@ For color-critical work, compare against a physical, ironed swatch card.
 
 ## Runtime libraries
 
-BeadSketch Studio uses Python, NumPy, OpenCV and Pillow. Their respective
+MOSAIBEADS uses Python, NumPy, OpenCV and Pillow. Their respective
 licenses are included by the packaged runtime or available from their projects.
 
 ## Optional MobileNetV3-Small model

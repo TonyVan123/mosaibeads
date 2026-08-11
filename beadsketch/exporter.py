@@ -56,7 +56,7 @@ def render_chart(result: PatternResult, cell: int = 42) -> Image.Image:
     draw = ImageDraw.Draw(canvas)
     title_font, label_font = _font(30, True), _font(max(11, int(cell * 0.28)), True)
     small_font, legend_font = _font(14), _font(16)
-    draw.text((32, 24), "BeadSketch Studio 拼豆图纸", fill=(31, 35, 41), font=title_font)
+    draw.text((32, 24), "MOSAIBEADS 拼豆图纸", fill=(31, 35, 41), font=title_font)
     subtitle = f"{result.width} × {result.height}  ·  {result.width * result.height} 颗  ·  {len(result.counts())} 色"
     draw.text((34, 66), subtitle, fill=(93, 99, 109), font=small_font)
     rgb = result.rgb
@@ -140,7 +140,7 @@ def export_bundle(result: PatternResult, folder: str | Path, source_name: str = 
     outputs.append(materials)
     project = folder / f"{safe}_project.json"
     data = {
-        "app": "BeadSketch Studio",
+        "app": "MOSAIBEADS",
         "grid": [result.width, result.height],
         "profile": result.profile,
         "metadata": result.metadata,
@@ -150,4 +150,3 @@ def export_bundle(result: PatternResult, folder: str | Path, source_name: str = 
     project.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     outputs.append(project)
     return outputs
-

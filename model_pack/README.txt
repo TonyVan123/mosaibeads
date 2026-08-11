@@ -1,4 +1,4 @@
-BeadSketch Studio 可选 AI 模型包
+MOSAIBEADS 可选 AI 模型包
 ================================
 
 semantic_encoder.onnx 是官方预训练 MobileNetV3-Small 的视觉特征编码器。

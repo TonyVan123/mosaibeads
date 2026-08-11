@@ -23,7 +23,9 @@ class AIModelStatus:
 
 
 def model_pack_dir() -> Path:
-    override = os.environ.get("BEADSKETCH_MODEL_PACK")
+    # MOSAIBEADS is the public V3 name. Keep the V2 variable as a compatibility
+    # alias for existing GPU model-pack installations.
+    override = os.environ.get("MOSAIBEADS_MODEL_PACK") or os.environ.get("BEADSKETCH_MODEL_PACK")
     if override:
         return Path(override)
     if getattr(sys, "frozen", False):

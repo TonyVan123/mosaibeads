@@ -33,11 +33,11 @@ TUNABLE_KEYS = ("palette", "background", "width", "max_colors", "profile",
 class BeadSketchApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("BeadSketch Studio 2.3 · 智能拼豆图纸")
+        self.title("MOSAIBEADS 3.0 · 智能拼豆图纸")
         screen_w, screen_h = self.winfo_screenwidth(), self.winfo_screenheight()
         win_w, win_h = min(1440, screen_w - 80), min(900, screen_h - 100)
         self.geometry(f"{win_w}x{win_h}+{max(0, (screen_w-win_w)//2)}+{max(0, (screen_h-win_h)//2)}")
-        self.minsize(1120, 720)
+        self.minsize(1220, 760)
         self.configure(bg=BG)
         self.source_image: Image.Image | None = None
         self.source_path: Path | None = None
@@ -47,12 +47,14 @@ class BeadSketchApp(tk.Tk):
         self.source_photo: ImageTk.PhotoImage | None = None
         self.display_info = (0.0, 0.0, 1.0)
         self.selected_color = 0
+        self.swatch_buttons: list[tk.Button] = []
         self.undo_stack: list[tuple[int, int, int, int]] = []
         self.redo_stack: list[tuple[int, int, int, int]] = []
         self.work_queue: queue.Queue = queue.Queue()
+        self._poll_after_id: str | None = None
         self._build_style()
         self._build_ui()
-        self.after(80, self._poll_queue)
+        self._poll_after_id = self.after(80, self._poll_queue)
         self.bind("<Control-o>", lambda _e: self.open_image())
         self.bind("<Control-e>", lambda _e: self.export())
         self.bind("<Control-z>", lambda _e: self.undo())
@@ -98,12 +100,19 @@ class BeadSketchApp(tk.Tk):
         style.map("Treeview", background=[("selected", ACCENT_DARK)], foreground=[("selected", "white")])
 
     def _build_ui(self) -> None:
-        header = ttk.Frame(self, style="Dark.TFrame", padding=(18, 13))
+        header = ttk.Frame(self, style="Dark.TFrame", padding=(18, 10))
         header.pack(fill="x")
-        ttk.Label(header, text="BeadSketch Studio 2.3", style="Title.TLabel", background=BG).pack(side="left")
-        ttk.Label(header, text="  用更少豆粒保留更重要的特征", style="Muted.TLabel", background=BG).pack(side="left", pady=(6, 0))
-        ttk.Button(header, text="导出图纸  Ctrl+E", style="Accent.TButton", command=self.export).pack(side="right")
-        ttk.Button(header, text="打开图片  Ctrl+O", command=self.open_image).pack(side="right", padx=9)
+        brand = ttk.Frame(header, style="Dark.TFrame")
+        brand.pack(side="left", fill="y", padx=(0, 14))
+        ttk.Label(brand, text="MOSAIBEADS 3.0", style="Title.TLabel", background=BG).pack(anchor="nw", pady=(5, 0))
+
+        actions = ttk.Frame(header, style="Dark.TFrame")
+        actions.pack(side="right", fill="y", padx=(12, 0))
+        ttk.Button(actions, text="导出图纸  Ctrl+E", style="Accent.TButton", command=self.export).pack(anchor="e", fill="x", pady=(5, 6))
+        ttk.Button(actions, text="打开图片  Ctrl+O", command=self.open_image).pack(anchor="e", fill="x")
+
+        self.top_controls = ttk.Frame(header, style="Dark.TFrame")
+        self.top_controls.pack(side="left", fill="both", expand=True)
 
         body = ttk.Frame(self, style="Dark.TFrame")
         body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -128,11 +137,13 @@ class BeadSketchApp(tk.Tk):
         self.bind_all("<MouseWheel>", self._scroll_left_web_style, add="+")
         self.bind_all("<Button-4>", lambda e: self._scroll_left_linux(e, -1), add="+")
         self.bind_all("<Button-5>", lambda e: self._scroll_left_linux(e, 1), add="+")
-        self.center = ttk.Frame(body, style="Dark.TFrame")
-        self.center.pack(side="left", fill="both", expand=True)
-        self.right = ttk.Frame(body, width=280, padding=12)
+        self.right = ttk.Frame(body, width=330, padding=12)
         self.right.pack(side="right", fill="y", padx=(10, 0))
         self.right.pack_propagate(False)
+        # Reserve the fixed-width sidebars before the expanding center. Packing the
+        # center first lets it consume the right palette's space on 1360 px screens.
+        self.center = ttk.Frame(body, style="Dark.TFrame")
+        self.center.pack(side="left", fill="both", expand=True)
         self._build_controls()
         self._build_canvases()
         self._build_palette_panel()
@@ -199,36 +210,56 @@ class BeadSketchApp(tk.Tk):
                      state="readonly", style="Readable.TCombobox").pack(fill="x", pady=3)
         ttk.Label(self.left, text="人像通常关闭抖动；风景渐变可选“轻微”", style="Muted.TLabel", wraplength=245).pack(anchor="w")
 
-        self._section("3 · 智能方案")
-        self.ai_status = inspect_ai_model()
-        ttk.Checkbutton(self.left, text="启用可选 AI 语义评分", variable=self.ai_var).pack(anchor="w")
-        ttk.Label(self.left, text=f"{self.ai_status.provider}：{self.ai_status.detail}",
-                  style="Muted.TLabel", wraplength=260).pack(anchor="w", pady=(1, 4))
-        self.smart_btn = ttk.Button(self.left, text="全参数智能调参（3 套方案）",
-                                    style="Accent.TButton", command=self.smart_tune)
-        self.smart_btn.pack(fill="x", pady=(3, 4))
-        ttk.Label(self.left, text="勾选“固定”的参数保持当前值，只搜索其余参数",
-                  style="Muted.TLabel", wraplength=260).pack(anchor="w", pady=(0, 4))
-        self.scheme_combo = ttk.Combobox(self.left, textvariable=self.scheme_var,
-                                         values=[SCHEME_LIKENESS, SCHEME_BALANCED, SCHEME_CRAFT],
-                                         state="readonly", style="Readable.TCombobox")
-        self.scheme_combo.pack(fill="x", pady=(0, 4))
-        self.scheme_combo.bind("<<ComboboxSelected>>", self._switch_scheme)
-        ttk.Button(self.left, text="指定具体豆色 Demo", command=self.open_palette_demo).pack(fill="x", pady=(0, 4))
+        self._build_top_controls()
 
-        self._section("4 · 预览与精修")
-        ttk.Checkbutton(self.left, text="显示豆孔", variable=self.holes_var, command=self.refresh_pattern).pack(anchor="w")
-        ttk.Checkbutton(self.left, text="显示网格", variable=self.grid_var, command=self.refresh_pattern).pack(anchor="w")
-        buttons = ttk.Frame(self.left)
-        buttons.pack(fill="x", pady=8)
-        ttk.Button(buttons, text="撤销", command=self.undo).pack(side="left", fill="x", expand=True)
-        ttk.Button(buttons, text="重做", command=self.redo).pack(side="left", fill="x", expand=True, padx=(6, 0))
-        self.generate_btn = ttk.Button(self.left, text="按当前参数生成", command=self.generate)
-        self.generate_btn.pack(fill="x", pady=(8, 5))
-        self.progress = ttk.Progressbar(self.left, mode="determinate", maximum=100)
-        self.progress.pack(fill="x", pady=4)
+    def _build_top_controls(self) -> None:
+        smart_card = ttk.LabelFrame(self.top_controls, text="3 · 智能方案", padding=(10, 6))
+        smart_card.pack(side="left", fill="both", expand=True, padx=(0, 7))
+        self.ai_status = inspect_ai_model()
+
+        smart_meta = ttk.Frame(smart_card)
+        smart_meta.pack(fill="x")
+        ttk.Checkbutton(smart_meta, text="AI 语义评分", variable=self.ai_var).pack(side="left")
+        ttk.Label(smart_meta, text=self.ai_status.provider, style="Muted.TLabel").pack(side="right")
+
+        smart_actions = ttk.Frame(smart_card)
+        smart_actions.pack(fill="x", pady=(4, 3))
+        self.smart_btn = ttk.Button(smart_actions, text="智能调参（3 套）",
+                                    style="Accent.TButton", command=self.smart_tune)
+        self.smart_btn.pack(side="left", fill="x", expand=True)
+        self.scheme_combo = ttk.Combobox(smart_actions, textvariable=self.scheme_var,
+                                         values=[SCHEME_LIKENESS, SCHEME_BALANCED, SCHEME_CRAFT],
+                                         state="readonly", width=11, style="Readable.TCombobox")
+        self.scheme_combo.pack(side="left", padx=(6, 0))
+        self.scheme_combo.bind("<<ComboboxSelected>>", self._switch_scheme)
+
+        smart_bottom = ttk.Frame(smart_card)
+        smart_bottom.pack(fill="x")
+        ttk.Label(smart_bottom, text="固定项不参与搜索", style="Muted.TLabel").pack(side="left")
+        ttk.Button(smart_bottom, text="指定豆色", command=self.open_palette_demo).pack(side="right")
+
+        refine_card = ttk.LabelFrame(self.top_controls, text="4 · 预览与精修", padding=(10, 6))
+        refine_card.pack(side="left", fill="both", expand=True, padx=(0, 2))
+
+        refine_top = ttk.Frame(refine_card)
+        refine_top.pack(fill="x")
+        ttk.Checkbutton(refine_top, text="豆孔", variable=self.holes_var,
+                        command=self.refresh_pattern).pack(side="left")
+        ttk.Checkbutton(refine_top, text="网格", variable=self.grid_var,
+                        command=self.refresh_pattern).pack(side="left", padx=(6, 0))
+        ttk.Button(refine_top, text="撤销", command=self.undo).pack(side="right")
+        ttk.Button(refine_top, text="重做", command=self.redo).pack(side="right", padx=(0, 5))
+
+        refine_actions = ttk.Frame(refine_card)
+        refine_actions.pack(fill="x", pady=(4, 3))
+        self.generate_btn = ttk.Button(refine_actions, text="按当前参数生成", command=self.generate)
+        self.generate_btn.pack(side="left", fill="x", expand=True)
+        self.progress = ttk.Progressbar(refine_actions, mode="determinate", maximum=100, length=120)
+        self.progress.pack(side="left", fill="x", expand=True, padx=(7, 0))
+
         self.status_var = tk.StringVar(value="请先打开一张图片")
-        ttk.Label(self.left, textvariable=self.status_var, style="Muted.TLabel", wraplength=245).pack(anchor="w")
+        ttk.Label(refine_card, textvariable=self.status_var, style="Muted.TLabel",
+                  wraplength=355).pack(anchor="w")
 
     def _pointer_in_left_column(self) -> bool:
         x, y = self.winfo_pointerxy()
@@ -261,7 +292,8 @@ class BeadSketchApp(tk.Tk):
         panes.add(source_frame, weight=1)
         panes.add(result_frame, weight=1)
         ttk.Label(source_frame, text="原图", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
-        ttk.Label(result_frame, text="拼豆效果 · 点击格子可手工改色", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
+        ttk.Label(result_frame, text="拼豆效果 · 右侧选色后点击或拖动格子填色",
+                  style="Section.TLabel").pack(anchor="w", pady=(0, 5))
         self.source_canvas = tk.Canvas(source_frame, bg="#101216", highlightthickness=0)
         self.source_canvas.pack(fill="both", expand=True)
         self.pattern_canvas = tk.Canvas(result_frame, bg="#101216", highlightthickness=0, cursor="crosshair")
@@ -272,8 +304,36 @@ class BeadSketchApp(tk.Tk):
         self.pattern_canvas.bind("<Configure>", lambda _e: self.refresh_pattern())
 
     def _build_palette_panel(self) -> None:
-        ttk.Label(self.right, text="当前图纸色板", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
-        ttk.Label(self.right, text="先选色，再在图纸格子上涂色", style="Muted.TLabel").pack(anchor="w", pady=(0, 8))
+        ttk.Label(self.right, text="拼豆色号调色板", style="Section.TLabel").pack(anchor="w", pady=(0, 3))
+        ttk.Label(self.right, text="点选色块，再点击或拖动图纸格子填色",
+                  style="Muted.TLabel").pack(anchor="w", pady=(0, 7))
+
+        selected = ttk.Frame(self.right)
+        selected.pack(fill="x", pady=(0, 7))
+        self.selected_chip = tk.Canvas(selected, width=30, height=30, bg=PANEL,
+                                       highlightthickness=2, highlightbackground=ACCENT)
+        self.selected_chip.pack(side="left")
+        self.selected_color_var = tk.StringVar(value="尚未选择颜色")
+        ttk.Label(selected, textvariable=self.selected_color_var).pack(side="left", padx=(8, 0))
+
+        swatch_shell = ttk.Frame(self.right)
+        swatch_shell.pack(fill="x", pady=(0, 9))
+        self.swatch_canvas = tk.Canvas(swatch_shell, height=210, bg=PANEL_2,
+                                       highlightthickness=1, highlightbackground="#3b404a",
+                                       yscrollincrement=20)
+        swatch_scroll = ttk.Scrollbar(swatch_shell, orient="vertical", command=self.swatch_canvas.yview)
+        self.swatch_canvas.configure(yscrollcommand=swatch_scroll.set)
+        swatch_scroll.pack(side="right", fill="y")
+        self.swatch_canvas.pack(side="left", fill="x", expand=True)
+        self.swatch_grid = ttk.Frame(self.swatch_canvas)
+        swatch_window = self.swatch_canvas.create_window((0, 0), window=self.swatch_grid, anchor="nw")
+        self.swatch_grid.bind("<Configure>", lambda _e: self.swatch_canvas.configure(
+            scrollregion=self.swatch_canvas.bbox("all")))
+        self.swatch_canvas.bind("<Configure>", lambda e: self.swatch_canvas.itemconfigure(
+            swatch_window, width=e.width))
+        self.swatch_canvas.bind("<MouseWheel>", self._scroll_swatches)
+
+        ttk.Label(self.right, text="色号与用量", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
         self.color_tree = ttk.Treeview(self.right, columns=("code", "count"), show="headings", selectmode="browse")
         self.color_tree.heading("code", text="色号 / 名称")
         self.color_tree.heading("count", text="数量")
@@ -284,7 +344,14 @@ class BeadSketchApp(tk.Tk):
         info = ttk.Frame(self.right)
         info.pack(fill="x", pady=(10, 0))
         self.info_var = tk.StringVar(value="尚未生成图纸")
-        ttk.Label(info, textvariable=self.info_var, style="Muted.TLabel", wraplength=250).pack(anchor="w")
+        ttk.Label(info, textvariable=self.info_var, style="Muted.TLabel", wraplength=295).pack(anchor="w")
+
+    def _scroll_swatches(self, event):
+        delta = int(getattr(event, "delta", 0))
+        if delta:
+            steps = -round(delta / 120) if abs(delta) >= 120 else (-1 if delta > 0 else 1)
+            self.swatch_canvas.yview_scroll(steps, "units")
+        return "break"
 
     def open_image(self) -> None:
         path = filedialog.askopenfilename(title="选择图片", filetypes=[("图片", "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.tif;*.tiff"), ("所有文件", "*.*")])
@@ -401,8 +468,10 @@ class BeadSketchApp(tk.Tk):
 
     def _apply_result(self, result: PatternResult) -> None:
         self.result = result
+        self.selected_color = 0
         self.undo_stack.clear()
         self.redo_stack.clear()
+        self._rebuild_swatch_palette()
         self._fill_color_tree()
         self.refresh_pattern()
         self._refresh_info()
@@ -468,23 +537,85 @@ class BeadSketchApp(tk.Tk):
                     messagebox.showerror("生成失败", item[1])
         except queue.Empty:
             pass
-        self.after(80, self._poll_queue)
+        self._poll_after_id = self.after(80, self._poll_queue)
+
+    def destroy(self) -> None:
+        if self._poll_after_id is not None:
+            try:
+                self.after_cancel(self._poll_after_id)
+            except tk.TclError:
+                pass
+            self._poll_after_id = None
+        super().destroy()
 
     def _fill_color_tree(self) -> None:
         self.color_tree.delete(*self.color_tree.get_children())
         if not self.result:
             return
+        self.selected_color = min(max(0, self.selected_color), len(self.result.palette) - 1)
         counts = dict((c.code, n) for c, n in self.result.counts())
         for i, color in enumerate(self.result.palette):
             label = color.code if color.name == color.code else f"{color.code}  {color.name}"
             self.color_tree.insert("", "end", iid=str(i), values=(label, counts.get(color.code, 0)))
         if self.result.palette:
-            self.color_tree.selection_set("0")
+            self._set_selected_color(self.selected_color)
+
+    def _rebuild_swatch_palette(self) -> None:
+        for child in self.swatch_grid.winfo_children():
+            child.destroy()
+        self.swatch_buttons.clear()
+        if not self.result:
+            return
+
+        columns = 4
+        for i, color in enumerate(self.result.palette):
+            tile = ttk.Frame(self.swatch_grid, padding=(3, 3))
+            tile.grid(row=i // columns, column=i % columns, sticky="nsew", padx=2, pady=2)
+            self.swatch_grid.grid_columnconfigure(i % columns, weight=1, uniform="swatches")
+            hex_color = "#{:02x}{:02x}{:02x}".format(*color.rgb)
+            button = tk.Button(tile, width=4, height=2, bg=hex_color,
+                               activebackground=hex_color, relief="flat", bd=0,
+                               highlightthickness=3, highlightbackground="#555b66",
+                               highlightcolor=ACCENT, cursor="hand2",
+                               command=lambda index=i: self._set_selected_color(index))
+            button.pack(fill="x")
+            label = ttk.Label(tile, text=color.code, anchor="center",
+                              style="Muted.TLabel", font=("Microsoft YaHei UI", 8))
+            label.pack(fill="x", pady=(2, 0))
+            label.bind("<Button-1>", lambda _e, index=i: self._set_selected_color(index))
+            button.bind("<MouseWheel>", self._scroll_swatches)
+            label.bind("<MouseWheel>", self._scroll_swatches)
+            self.swatch_buttons.append(button)
+
+        self.swatch_canvas.yview_moveto(0)
+        self._set_selected_color(self.selected_color)
+
+    def _set_selected_color(self, index: int, sync_tree: bool = True) -> None:
+        if not self.result or not self.result.palette:
+            return
+        index = min(max(0, int(index)), len(self.result.palette) - 1)
+        self.selected_color = index
+        color = self.result.palette[index]
+
+        for i, button in enumerate(self.swatch_buttons):
+            chosen = i == index
+            button.configure(highlightbackground=ACCENT if chosen else "#555b66",
+                             relief="sunken" if chosen else "flat")
+
+        self.selected_chip.delete("all")
+        hex_color = "#{:02x}{:02x}{:02x}".format(*color.rgb)
+        self.selected_chip.create_rectangle(1, 1, 29, 29, fill=hex_color, outline=hex_color)
+        label = color.code if color.name == color.code else f"{color.code}  {color.name}"
+        self.selected_color_var.set(f"当前：{label}")
+
+        if sync_tree and self.color_tree.exists(str(index)):
+            self.color_tree.selection_set(str(index))
+            self.color_tree.see(str(index))
 
     def _select_tree_color(self, _event=None) -> None:
         selected = self.color_tree.selection()
         if selected:
-            self.selected_color = int(selected[0])
+            self._set_selected_color(int(selected[0]), sync_tree=False)
 
     def _paint_event(self, event) -> None:
         if not self.result:
@@ -530,7 +661,7 @@ class BeadSketchApp(tk.Tk):
         if not self.result:
             messagebox.showinfo("尚未生成", "请先打开图片并生成图纸。")
             return
-        initial = f"{(self.source_path.stem if self.source_path else 'pattern')}_BeadSketch"
+        initial = f"{(self.source_path.stem if self.source_path else 'pattern')}_MOSAIBEADS"
         folder = filedialog.askdirectory(title="选择导出文件夹", mustexist=True)
         if not folder:
             return
