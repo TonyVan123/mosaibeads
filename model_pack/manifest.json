@@ -1,5 +1,5 @@
 {
-  "name": "BeadSketch Semantic Model Pack",
+  "name": "MOSAIBEADS Semantic Model Pack",
   "version": "2.0.0",
   "architecture": "torchvision MobileNetV3-Small feature trunk",
   "input": "RGB NCHW float32 224x224, ImageNet normalization",

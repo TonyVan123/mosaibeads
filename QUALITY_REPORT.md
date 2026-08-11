@@ -1,61 +1,64 @@
-# Quality verification
+# MOSAIBEADS quality verification
 
-## V2.0 verification — 2026-08-11
+## V3.0.0 verification — 2026-08-12
 
-- Unit/integration tests: 9 passed, including exact fixed-palette enforcement,
-  click-color ranking and three-scheme auto tuning.
-- Portable executable: `BeadSketchStudio_v2.0.exe`, 67,893,297 bytes.
-- Packaged smoke test: exit code 0 from the delivered E-drive executable.
-- EXE SHA-256: `70acb9177b2cdcb84ecc771bce85d8c4f1a98f4d3fef2eb1d79cd7172168abb0`.
-- AI model: 3,717,007 bytes; SHA-256
-  `f405388cb07a6eaaa439dcb5d384d48a5c758c9a48e4a5b6a945cfa4363479a5`.
-- GPU verification: a real MobileNetV3 batch inference completed with
-  `CUDAExecutionProvider` on the NVIDIA GeForce RTX 4060 Laptop GPU.
-- CPU fallback: the same ONNX model was loaded and scored through OpenCV DNN.
-- Auto-tune end-to-end: nine preview candidates plus three final schemes completed
-  with GPU semantic scoring; provider metadata was propagated to the result.
+- Automated tests: **13 passed**.
+- Portable executable: `MOSAIBEADS_v3.0.exe`, **67,903,098 bytes**.
+- Packaged smoke test: **exit code 0**.
+- EXE SHA-256:
+  `FB7B70BDDFD3D669A28613AAD9DED07F35A83980B069683EF0E4B71B8AAD8F44`.
+- AI model: 3,717,007 bytes; SHA-256:
+  `F405388CB07A6EAAA439DCB5D384D48A5C758C9A48E4A5B6A945CFA4363479A5`.
+- Packaged GUI was opened from the final build and visually confirmed to show
+  `MOSAIBEADS 3.0`, sections 3/4 in the top toolbar, sections 1/2 in the left
+  sidebar, two center canvases and the right palette panel.
+- A generated 16-color pattern was used for visual QA of the right panel: four
+  columns of real color swatches, selected-color chip, code labels, scrollbar,
+  count table and summary information were simultaneously visible.
 
-The optional CUDA/cuDNN environment is intentionally not bundled into the base
-EXE or compact model pack because it is approximately 3GB. The included installer
-creates it beside the model on demand.
+## V3 UI invariants
 
-## Automated checks
+The automated UI tests verify that:
 
-`python -m unittest discover -s tests -v` verifies:
+- only `1 · 尺寸与色板` and `2 · 传神程度` remain in the left panel;
+- `3 · 智能方案` and `4 · 预览与精修` are top-level toolbar cards;
+- the former “用更少豆粒…” subtitle is absent;
+- at 1360×820 the right panel keeps its full 330 px width and the center remains
+  at least 650 px wide;
+- the number of swatches equals the result palette size;
+- selecting a swatch, painting a cell, updating counts, undoing and redoing all
+  preserve the selected color and synchronized table row.
 
-- sRGB ↔ Lab reference values;
-- the published CIEDE2000 Sharma test pair (expected ΔE 2.0425);
-- all four packaged palette files;
-- output dimensions, color limit and bead counts;
-- thin salient-line rescue at a 10:1 downscale;
-- creation of all six export artifacts, including PNG, PDF, CSV and JSON.
+## Algorithm and export checks
 
-## Visual test set
+The complete test suite also verifies:
 
-Development comparisons used the standard `skimage.data` astronaut portrait, cat,
-coffee and rocket-pad photographs, plus synthetic line art. They are not distributed
-with the application.
+- sRGB/Lab reference values and the published CIEDE2000 Sharma pair;
+- all four packaged brand palettes;
+- output dimensions, color limit and material count;
+- thin salient-line rescue;
+- strict fixed-color allow lists;
+- click-color recommendation ranking;
+- three switchable auto-tune intents;
+- joint search coverage for palette, background, size, color budget, profile and
+  likeness controls;
+- locked auto-tune parameters never change;
+- all six export artifacts, including PNG, PDF, CSV and JSON.
 
-The important finding was that an early, aggressively dominant-color version looked
-clean but removed too much mid-frequency facial and photographic detail. The final
-sampler therefore blends a stable area reference with a structure-aware representative:
+## Version separation
 
-- low-saliency flat cells stay close to the stable reference;
-- edge/face/saliency cells spend more of their weight on a real source-color medoid;
-- a coherent high-contrast minority can be rescued when a thin feature occupies too
-  little of a cell to win ordinary averaging;
-- spatial cleanup is weakened at real edges.
-
-On a synthetic 240×240 image containing a 3 px diagonal black line, conversion to
-24×24 kept 22 dark line cells in the recorded development run, while the box-average
-palette baseline produced no cells below the same luminance threshold. This test is
-also retained as a less brittle minimum check (`>=16` cells) in the test suite.
+- `v2.3.0` freezes the last BeadSketch Studio tree and executable.
+- `v3.0.0` contains the MOSAIBEADS rename, V3 interface and palette editor.
+- GitHub tags/Releases and local release directories keep the two deliverables
+  separate; build intermediates and old flat-directory executables are not mixed
+  into a release bundle.
 
 ## Practical acceptance criteria
 
-- Default 48-bead portrait generation completes in a few seconds on the development PC.
-- A result always uses no more than the selected color limit.
-- The editor can repaint any cell and undo/redo the change.
+- A result never exceeds the selected color limit.
 - The material count equals width × height after editing.
-- Exported charts contain cell codes, 5-cell guides, heavier 29×29 board boundaries and
-  a per-color material legend.
+- Current paint color survives all count refreshes and undo/redo actions.
+- Exported charts contain cell codes, 5-cell guides, heavier 29×29 board boundaries
+  and a per-color material legend.
+- The optional AI model remains local and automatically falls back to CPU or the
+  non-AI scorer when unavailable.

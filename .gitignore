@@ -22,6 +22,7 @@ latest_*.png
 test_*.png
 thin_line*.png
 ui_*.png
+packaged_ui*.png
 
 # Editor / OS
 .idea/

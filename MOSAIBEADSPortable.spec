@@ -26,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='BeadSketchStudio_v2.3',
+    name='MOSAIBEADS_v3.0',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
