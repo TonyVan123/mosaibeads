@@ -1,8 +1,14 @@
 # Changelog
 
-## 3.0.0 — MOSAIBEADS
+## 3.0.1 — MOSAIBeads
 
-- 产品更名为 MOSAIBEADS（MOSAIC + AI + BEADS）。
+- 品牌显示统一由全大写 `MOSAIBEADS` 调整为 `MOSAIBeads`。
+- 窗口标题、导出标识、构建产物、模型包说明和使用文档同步更新。
+- 版本化 Windows EXE 更新为 `MOSAIBeads_v3.0.1.exe`。
+
+## 3.0.0 — MOSAIBeads
+
+- 产品更名为 MOSAIBeads（MOSAIC + AI + BEADS）。
 - 左栏仅保留“尺寸与色板”“传神程度”。
 - “智能方案”“预览与精修”迁移到顶部工具区。
 - 删除标题后的宣传副标题。
@@ -11,7 +17,7 @@
 - 修复每次填色刷新色号表后选色被重置为第一个颜色的问题。
 - 保留完整色号、名称、数量、总豆数、成品尺寸和板数信息。
 - 新增 V3 UI 布局与选色持久性自动测试。
-- 导出品牌与默认目录名更新为 MOSAIBEADS。
+- 导出品牌与默认目录名更新为 MOSAIBeads。
 
 ## 2.3.0 — BeadSketch Studio
 

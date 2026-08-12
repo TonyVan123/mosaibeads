@@ -14,7 +14,7 @@ For color-critical work, compare against a physical, ironed swatch card.
 
 ## Runtime libraries
 
-MOSAIBEADS uses Python, NumPy, OpenCV and Pillow. Their respective
+MOSAIBeads uses Python, NumPy, OpenCV and Pillow. Their respective
 licenses are included by the packaged runtime or available from their projects.
 
 ## Optional MobileNetV3-Small model

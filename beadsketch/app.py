@@ -33,7 +33,7 @@ TUNABLE_KEYS = ("palette", "background", "width", "max_colors", "profile",
 class BeadSketchApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("MOSAIBEADS 3.0 · 智能拼豆图纸")
+        self.title("MOSAIBeads 3.0.1 · 智能拼豆图纸")
         screen_w, screen_h = self.winfo_screenwidth(), self.winfo_screenheight()
         win_w, win_h = min(1440, screen_w - 80), min(900, screen_h - 100)
         self.geometry(f"{win_w}x{win_h}+{max(0, (screen_w-win_w)//2)}+{max(0, (screen_h-win_h)//2)}")
@@ -104,7 +104,7 @@ class BeadSketchApp(tk.Tk):
         header.pack(fill="x")
         brand = ttk.Frame(header, style="Dark.TFrame")
         brand.pack(side="left", fill="y", padx=(0, 14))
-        ttk.Label(brand, text="MOSAIBEADS 3.0", style="Title.TLabel", background=BG).pack(anchor="nw", pady=(5, 0))
+        ttk.Label(brand, text="MOSAIBeads 3.0.1", style="Title.TLabel", background=BG).pack(anchor="nw", pady=(5, 0))
 
         actions = ttk.Frame(header, style="Dark.TFrame")
         actions.pack(side="right", fill="y", padx=(12, 0))
@@ -661,7 +661,7 @@ class BeadSketchApp(tk.Tk):
         if not self.result:
             messagebox.showinfo("尚未生成", "请先打开图片并生成图纸。")
             return
-        initial = f"{(self.source_path.stem if self.source_path else 'pattern')}_MOSAIBEADS"
+        initial = f"{(self.source_path.stem if self.source_path else 'pattern')}_MOSAIBeads"
         folder = filedialog.askdirectory(title="选择导出文件夹", mustexist=True)
         if not folder:
             return

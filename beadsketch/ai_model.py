@@ -23,7 +23,7 @@ class AIModelStatus:
 
 
 def model_pack_dir() -> Path:
-    # MOSAIBEADS is the public V3 name. Keep the V2 variable as a compatibility
+    # MOSAIBeads is the public V3 name. Keep the V2 variable as a compatibility
     # alias for existing GPU model-pack installations.
     override = os.environ.get("MOSAIBEADS_MODEL_PACK") or os.environ.get("BEADSKETCH_MODEL_PACK")
     if override:
