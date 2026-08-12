@@ -14,6 +14,21 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+## 独立手工编辑器
+
+`manual_editor_main.py` 是不依赖图片转换流程的手工拼豆编辑器，内置“原始识别版”与
+“脸型/吊带/右眼调整版”两份 58×57 情侣图纸。它支持左键拖动上色、右键取色、
+橙色高对比选色、整笔撤销/重做、横纵滚动、缩放、JSON 项目保存，以及完整图纸导出。
+
+源码运行与单文件打包：
+
+```powershell
+python manual_editor_main.py
+pyinstaller --noconfirm --clean MOSAIBeadsManualEditor.spec
+```
+
+输出为 `dist/MOSAIBeads_Manual_Editor.exe`，具体操作见 `手工编辑器使用说明.md`。
+
 ## V3 界面
 
 - 左栏只保留 `1 · 尺寸与色板` 和 `2 · 传神程度`；
