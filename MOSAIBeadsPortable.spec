@@ -26,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='MOSAIBEADS_v3.0',
+    name='MOSAIBeads_v3.0.1',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

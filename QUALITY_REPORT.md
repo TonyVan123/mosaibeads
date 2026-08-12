@@ -1,16 +1,16 @@
-# MOSAIBEADS quality verification
+# MOSAIBeads quality verification
 
-## V3.0.0 verification — 2026-08-12
+## V3.0.1 verification — 2026-08-12
 
 - Automated tests: **13 passed**.
-- Portable executable: `MOSAIBEADS_v3.0.exe`, **67,903,098 bytes**.
+- Portable executable: `MOSAIBeads_v3.0.1.exe`, **67,902,564 bytes**.
 - Packaged smoke test: **exit code 0**.
 - EXE SHA-256:
-  `FB7B70BDDFD3D669A28613AAD9DED07F35A83980B069683EF0E4B71B8AAD8F44`.
+  `B51F71006FBD9C308C4CE39ECF51FF4669708DE1FF537DC5D1ABEF241D6615C0`.
 - AI model: 3,717,007 bytes; SHA-256:
   `F405388CB07A6EAAA439DCB5D384D48A5C758C9A48E4A5B6A945CFA4363479A5`.
 - Packaged GUI was opened from the final build and visually confirmed to show
-  `MOSAIBEADS 3.0`, sections 3/4 in the top toolbar, sections 1/2 in the left
+  `MOSAIBeads 3.0.1`, sections 3/4 in the top toolbar, sections 1/2 in the left
   sidebar, two center canvases and the right palette panel.
 - A generated 16-color pattern was used for visual QA of the right panel: four
   columns of real color swatches, selected-color chip, code labels, scrollbar,
@@ -48,7 +48,9 @@ The complete test suite also verifies:
 ## Version separation
 
 - `v2.3.0` freezes the last BeadSketch Studio tree and executable.
-- `v3.0.0` contains the MOSAIBEADS rename, V3 interface and palette editor.
+- `v3.0.0` contains the original V3 interface and palette editor.
+- `v3.0.1` standardizes the public brand casing as `MOSAIBeads` throughout the
+  interface, exports, build artifacts and documentation.
 - GitHub tags/Releases and local release directories keep the two deliverables
   separate; build intermediates and old flat-directory executables are not mixed
   into a release bundle.

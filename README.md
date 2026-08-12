@@ -1,11 +1,11 @@
-# MOSAIBEADS 3.0
+# MOSAIBeads 3.0.1
 
 **MOSAIC + AI + BEADS**：把照片、头像、宠物或插画转换成可直接制作的拼豆图纸，
 在有限豆格和真实品牌色板中优先保留主体轮廓、五官和标志性特征。
 
 ## 直接使用
 
-Windows 用户可直接运行 `MOSAIBEADS_v3.0.exe`。程序默认完全离线处理图片。
+Windows 用户可直接运行 `MOSAIBeads_v3.0.1.exe`。程序默认完全离线处理图片。
 
 源码运行：
 
@@ -18,7 +18,7 @@ python main.py
 
 - 左栏只保留 `1 · 尺寸与色板` 和 `2 · 传神程度`；
 - `3 · 智能方案` 与 `4 · 预览与精修` 移到顶部；
-- 顶部左侧只显示 `MOSAIBEADS 3.0`，没有宣传副标题；
+- 顶部左侧只显示 `MOSAIBeads 3.0.1`，没有宣传副标题；
 - 中央原图与图纸保持并排，顶部工具区为方形图片留出更合适的纵向比例；
 - 右栏同时显示可点击的真实豆色色块，以及完整色号、名称和用量表。
 
@@ -68,7 +68,7 @@ python main.py
 ## 导出内容
 
 “导出图纸”会生成：豆孔成品 PNG、纯像素 PNG、带色号高清 PNG、可打印 PDF、
-用量 CSV 和可编辑 JSON 工程数据。导出目录默认以 `_MOSAIBEADS` 结尾。
+用量 CSV 和可编辑 JSON 工程数据。导出目录默认以 `_MOSAIBeads` 结尾。
 
 ## 品牌色板
 
@@ -84,13 +84,14 @@ build_exe.bat
 
 输出：
 
-- `dist/MOSAIBEADS/MOSAIBEADS.exe`：目录版；
-- `dist/MOSAIBEADS_v3.0.exe`：单文件便携版。
+- `dist/MOSAIBeads/MOSAIBeads.exe`：目录版；
+- `dist/MOSAIBeads_v3.0.1.exe`：单文件便携版。
 
 ## 版本隔离
 
 - `v2.3.0` 标签与 GitHub Release 保存最后一个 BeadSketch Studio 稳定版；
-- `v3.0.0` 标签与 GitHub Release 保存 MOSAIBEADS 3.0；
-- 本地交付按 `releases/v2.3.0`、`releases/v3.0.0` 分目录，不混放可执行文件。
+- `v3.0.0` 标签与 GitHub Release 保存最初的 V3.0.0；
+- `v3.0.1` 标签与 GitHub Release 保存统一使用 `MOSAIBeads` 品牌大小写的当前版本；
+- 本地交付按 `v2.3.0`、`v3.0.0`、`v3.0.1` 分目录，不混放可执行文件。
 
 完整算法说明见 `原理与调参指南.md`，版本变化见 `CHANGELOG.md`。

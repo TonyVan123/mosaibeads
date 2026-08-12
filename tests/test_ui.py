@@ -54,7 +54,7 @@ class V3UiTests(unittest.TestCase):
 
         self.assertEqual(left_sections, ["1 · 尺寸与色板", "2 · 传神程度"])
         self.assertEqual(top_sections, ["3 · 智能方案", "4 · 预览与精修"])
-        self.assertEqual(self.app.title(), "MOSAIBEADS 3.0 · 智能拼豆图纸")
+        self.assertEqual(self.app.title(), "MOSAIBeads 3.0.1 · 智能拼豆图纸")
         self.assertFalse(any("用更少豆粒" in text for text in all_labels))
         self.assertEqual(self.app.right.winfo_width(), 330)
         self.assertGreaterEqual(self.app.center.winfo_width(), 650)
