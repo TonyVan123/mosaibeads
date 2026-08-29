@@ -76,6 +76,99 @@ def _complete_palette(result: PatternResult, brand: str) -> list[BeadColor]:
     return colors
 
 
+def _grid_border(x: int, y: int, width: int, height: int, fine: Side, medium: Side, board: Side) -> Border:
+    left = board if x % 29 == 0 else (medium if x % 5 == 0 else fine)
+    top = board if y % 29 == 0 else (medium if y % 5 == 0 else fine)
+    right = board if (x + 1) % 29 == 0 or x == width - 1 else fine
+    bottom = board if (y + 1) % 29 == 0 or y == height - 1 else fine
+    return Border(left=left, top=top, right=right, bottom=bottom)
+
+
+def _safe_sheet_title(code: str, existing: set[str]) -> str:
+    title = "".join("_" if char in "[]:*?/\\" else char for char in code).strip()[:31] or "色号"
+    candidate = title
+    suffix = 2
+    while candidate in existing:
+        tail = f"_{suffix}"
+        candidate = title[:31 - len(tail)] + tail
+        suffix += 1
+    return candidate
+
+
+def _add_color_location_sheet(
+    wb: Workbook,
+    result: PatternResult,
+    color: BeadColor,
+    count: int,
+    header_fill: PatternFill,
+    header_font: Font,
+    fine: Side,
+    medium: Side,
+    board: Side,
+) -> None:
+    """Add an Excel-style coordinate mask for one bead color."""
+    title = _safe_sheet_title(color.code, set(wb.sheetnames))
+    ws = wb.create_sheet(title)
+    ws.sheet_properties.tabColor = _hex(color.rgb)
+    ws.sheet_view.showGridLines = False
+    ws.sheet_view.zoomScale = 85
+    ws.freeze_panes = "B2"
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+
+    ws.cell(1, 1, "行/列")
+    ws.cell(1, 1).fill, ws.cell(1, 1).font = header_fill, header_font
+    ws.cell(1, 1).alignment = Alignment(horizontal="center", vertical="center")
+    for x in range(result.width):
+        cell = ws.cell(1, x + GRID_START_COL, x + 1)
+        cell.fill, cell.font = header_fill, header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.column_dimensions[get_column_letter(x + GRID_START_COL)].width = 4.2
+    ws.column_dimensions["A"].width = 6.2
+    ws.row_dimensions[1].height = 22
+
+    color_indices = {idx for idx, item in enumerate(result.palette) if item.code.upper() == color.code.upper()}
+    black_fill = PatternFill("solid", fgColor="000000")
+    white_fill = PatternFill("solid", fgColor="FFFFFF")
+    white_font = Font(name="Arial", size=8, bold=True, color="FFFFFF")
+    for y in range(result.height):
+        label = ws.cell(y + GRID_START_ROW, 1, y + 1)
+        label.fill, label.font = header_fill, header_font
+        label.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[y + GRID_START_ROW].height = 24
+        for x in range(result.width):
+            matched = int(result.indices[y, x]) in color_indices
+            cell = ws.cell(y + GRID_START_ROW, x + GRID_START_COL, color.code if matched else None)
+            cell.fill = black_fill if matched else white_fill
+            cell.font = white_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
+            cell.border = _grid_border(x, y, result.width, result.height, fine, medium, board)
+
+    # Put a real-color 3×3 reference swatch outside the pattern grid.
+    swatch_col = result.width + GRID_START_COL + 2
+    swatch_end_col = swatch_col + 2
+    ws.merge_cells(start_row=1, start_column=swatch_col, end_row=1, end_column=swatch_end_col)
+    swatch_title = ws.cell(1, swatch_col, f"本页色号 · {count} 颗")
+    swatch_title.fill, swatch_title.font = header_fill, header_font
+    swatch_title.alignment = Alignment(horizontal="center", vertical="center")
+    color_fill = PatternFill("solid", fgColor=_hex(color.rgb))
+    for row in range(2, 5):
+        for col in range(swatch_col, swatch_end_col + 1):
+            cell = ws.cell(row, col)
+            cell.fill = color_fill
+            cell.border = Border(left=fine, right=fine, top=fine, bottom=fine)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+    code_cell = ws.cell(3, swatch_col + 1, color.code)
+    code_cell.font = Font(name="Arial", size=12, bold=True, color=_text_hex(color.rgb))
+    for col in range(swatch_col, swatch_end_col + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 7.0
+
+    print_end = get_column_letter(swatch_end_col)
+    ws.print_area = f"A1:{print_end}{result.height + 1}"
+
+
 def export_pattern_xlsx(result: PatternResult, path: str | Path) -> Path:
     """Write visual cell fills plus lossless brand/code metadata."""
     path = Path(path)
@@ -120,13 +213,16 @@ def export_pattern_xlsx(result: PatternResult, path: str | Path) -> Path:
             cell.fill = PatternFill("solid", fgColor=_hex(color.rgb))
             cell.font = Font(name="Arial", size=8, bold=True, color=_text_hex(color.rgb))
             cell.alignment = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
-            left = board if x % 29 == 0 else (medium if x % 5 == 0 else fine)
-            top = board if y % 29 == 0 else (medium if y % 5 == 0 else fine)
-            right = board if (x + 1) % 29 == 0 or x == result.width - 1 else fine
-            bottom = board if (y + 1) % 29 == 0 or y == result.height - 1 else fine
-            cell.border = Border(left=left, top=top, right=right, bottom=bottom)
+            cell.border = _grid_border(x, y, result.width, result.height, fine, medium, board)
     ws.auto_filter.ref = f"A1:{get_column_letter(result.width + 1)}{result.height + 1}"
     ws.print_area = f"A1:{get_column_letter(result.width + 1)}{result.height + 1}"
+
+    # Keep the current pattern as the first sheet, followed immediately by one
+    # black-and-white location mask for every bead color used in the pattern.
+    for color, count in result.counts():
+        _add_color_location_sheet(
+            wb, result, color, count, header_fill, header_font, fine, medium, board,
+        )
 
     palette_ws = wb.create_sheet(PALETTE_SHEET)
     palette_ws.sheet_view.showGridLines = False
