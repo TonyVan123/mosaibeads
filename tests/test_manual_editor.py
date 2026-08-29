@@ -44,6 +44,11 @@ class ManualEditorTests(unittest.TestCase):
         try:
             editor = ManualEditor(root)
             self.assertGreaterEqual(len(editor.result.palette), 291)
+            self.assertEqual(len(editor.palette_rows), len(editor.result.counts()))
+            editor.toggle_full_palette()
+            root.update_idletasks()
+            self.assertEqual(len(editor.full_palette_buttons), len(editor.result.palette))
+            editor._close_full_palette()
             before = editor.result.indices[0].copy()
             target = next(i for i in range(len(editor.result.palette)) if np.any(before != i))
             editor.selected_palette = target

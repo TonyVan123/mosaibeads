@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -145,7 +146,6 @@ class ManualEditor:
         self.selected_palette = 0
         self.edit_mode_var = tk.StringVar(value="paint")
         self.palette_filter_var = tk.StringVar()
-        self.used_only_var = tk.BooleanVar(value=False)
         self.zoom_index = 4
         self.margin = 42
         self.dirty = False
@@ -158,6 +158,9 @@ class ManualEditor:
         self.cell_texts: list[list[int | None]] = []
         self.palette_rows: list[tk.Frame] = []
         self.palette_row_indices: list[int] = []
+        self.full_palette_popup: tk.Toplevel | None = None
+        self.full_palette_inner: tk.Frame | None = None
+        self.full_palette_buttons: dict[int, tk.Button] = {}
         self.selection: tuple[int, int, int, int] | None = None
         self.selection_anchor: tuple[int, int] | None = None
         self.selection_drag_kind = "cells"
@@ -271,16 +274,18 @@ class ManualEditor:
         self.summary_label = tk.Label(info, text="", bg=self.PANEL, fg=self.MUTED, justify="left", anchor="w", font=("Microsoft YaHei UI", 9))
         self.summary_label.pack(fill="x")
 
-        tk.Label(side, text="完整品牌色板（点击选择）", bg=self.PANEL, fg=self.TEXT, font=("Microsoft YaHei UI", 11, "bold"), padx=14, pady=8).pack(fill="x", anchor="w")
-        palette_tools = tk.Frame(side, bg=self.PANEL, padx=12, pady=3)
-        palette_tools.pack(fill="x")
-        search = tk.Entry(palette_tools, textvariable=self.palette_filter_var, bg="#F7F9FC", fg="#111827", font=("Microsoft YaHei UI", 9))
-        search.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=4)
-        search.insert(0, "")
-        self.palette_filter_var.trace_add("write", lambda *_args: self._render_palette())
-        tk.Checkbutton(palette_tools, text="只看已用", variable=self.used_only_var, command=self._render_palette,
-                       bg=self.PANEL, fg=self.TEXT, selectcolor=self.PANEL_2, activebackground=self.PANEL,
-                       activeforeground=self.TEXT, font=("Microsoft YaHei UI", 9)).pack(side="right")
+        palette_header = tk.Frame(side, bg=self.PANEL, padx=12, pady=7)
+        palette_header.pack(fill="x")
+        self.palette_count_label = tk.Label(
+            palette_header, text="图纸已用颜色", bg=self.PANEL, fg=self.TEXT,
+            font=("Microsoft YaHei UI", 11, "bold"), anchor="w",
+        )
+        self.palette_count_label.pack(side="left", fill="x", expand=True)
+        self.full_palette_button = ttk.Button(
+            palette_header, text="展开完整色板 ▾", style="Tool.TButton", command=self.toggle_full_palette,
+        )
+        self.full_palette_button.pack(side="right")
+        self.palette_filter_var.trace_add("write", lambda *_args: self._render_full_palette())
         palette_holder = tk.Frame(side, bg=self.PANEL)
         palette_holder.pack(fill="both", expand=True, padx=(8, 2), pady=(0, 8))
         self.palette_canvas = tk.Canvas(palette_holder, bg=self.PANEL, highlightthickness=0)
@@ -444,12 +449,11 @@ class ManualEditor:
         if self.result is None:
             return
         counts = {color.code: count for color, count in self.result.counts()}
-        query = self.palette_filter_var.get().strip().lower()
-        for idx, color in enumerate(self.result.palette):
-            if self.used_only_var.get() and counts.get(color.code, 0) == 0:
-                continue
-            if query and query not in color.code.lower() and query not in color.name.lower():
-                continue
+        used_indices = [idx for idx, color in enumerate(self.result.palette) if counts.get(color.code, 0) > 0]
+        used_indices.sort(key=lambda idx: (-counts[self.result.palette[idx].code], self._natural_code_key(self.result.palette[idx].code)))
+        self.palette_count_label.configure(text=f"图纸已用颜色（{len(used_indices)} 种）")
+        for idx in used_indices:
+            color = self.result.palette[idx]
             frame = tk.Frame(self.palette_inner, bg=self.PANEL_2, highlightthickness=3, highlightbackground=self.PANEL, padx=6, pady=5)
             frame.pack(fill="x", padx=5, pady=3)
             mark = tk.Label(frame, text="✓" if idx == self.selected_palette else "", width=2, bg=self.PANEL_2, fg=self.ACCENT, font=("Arial", 14, "bold"))
@@ -467,6 +471,127 @@ class ManualEditor:
             self.palette_row_indices.append(idx)
         self._refresh_palette_selection()
 
+    def toggle_full_palette(self) -> None:
+        if self.full_palette_popup is not None and self.full_palette_popup.winfo_exists():
+            self._close_full_palette()
+            return
+        if self.result is None:
+            return
+        popup = tk.Toplevel(self.root)
+        self.full_palette_popup = popup
+        popup.title("MOSAIBeads 完整品牌色板")
+        popup.configure(bg=self.BG)
+        popup.transient(self.root)
+        width = min(1220, popup.winfo_screenwidth() - 80)
+        height = min(760, popup.winfo_screenheight() - 100)
+        x = max(20, self.root.winfo_rootx() + (self.root.winfo_width() - width) // 2)
+        y = max(20, self.root.winfo_rooty() + (self.root.winfo_height() - height) // 2)
+        popup.geometry(f"{width}x{height}+{x}+{y}")
+        popup.minsize(820, 540)
+        popup.protocol("WM_DELETE_WINDOW", self._close_full_palette)
+        popup.bind("<Escape>", lambda _event: self._close_full_palette())
+        self.full_palette_button.configure(text="收起完整色板 ▴")
+
+        header = tk.Frame(popup, bg=self.BG, padx=16, pady=12)
+        header.pack(fill="x")
+        tk.Label(
+            header, text=f"完整品牌色板 · {len(self.result.palette)} 色",
+            bg=self.BG, fg=self.TEXT, font=("Microsoft YaHei UI", 15, "bold"),
+        ).pack(side="left")
+        tk.Label(
+            header, text="点击任意色块即可选中；按 Esc 关闭",
+            bg=self.BG, fg=self.MUTED, font=("Microsoft YaHei UI", 9),
+        ).pack(side="left", padx=16)
+        ttk.Button(header, text="关闭", style="Tool.TButton", command=self._close_full_palette).pack(side="right")
+
+        tools = tk.Frame(popup, bg=self.PANEL, padx=14, pady=9)
+        tools.pack(fill="x", padx=12)
+        tk.Label(tools, text="搜索色号", bg=self.PANEL, fg=self.TEXT, font=("Microsoft YaHei UI", 10)).pack(side="left", padx=(0, 8))
+        search = tk.Entry(
+            tools, textvariable=self.palette_filter_var, bg="#F7F9FC", fg="#111827",
+            insertbackground="#111827", font=("Microsoft YaHei UI", 10), width=24,
+        )
+        search.pack(side="left", ipady=5)
+        ttk.Button(tools, text="清除", style="Tool.TButton", command=lambda: self.palette_filter_var.set("")).pack(side="left", padx=7)
+        tk.Label(
+            tools, text="色块上的文字就是品牌色号",
+            bg=self.PANEL, fg=self.MUTED, font=("Microsoft YaHei UI", 9),
+        ).pack(side="right")
+
+        holder = tk.Frame(popup, bg=self.BG)
+        holder.pack(fill="both", expand=True, padx=12, pady=(8, 12))
+        canvas = tk.Canvas(holder, bg=self.BG, highlightthickness=0)
+        scroll = ttk.Scrollbar(holder, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        self.full_palette_inner = tk.Frame(canvas, bg=self.BG)
+        window = canvas.create_window((0, 0), window=self.full_palette_inner, anchor="nw")
+        self.full_palette_inner.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window, width=e.width))
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-int(e.delta / 120), "units") if self.full_palette_popup is not None else None)
+        search.focus_set()
+        self._render_full_palette()
+
+    def _close_full_palette(self) -> None:
+        popup = self.full_palette_popup
+        self.full_palette_popup = None
+        self.full_palette_inner = None
+        self.full_palette_buttons.clear()
+        self.full_palette_button.configure(text="展开完整色板 ▾")
+        if popup is not None and popup.winfo_exists():
+            popup.destroy()
+
+    def _render_full_palette(self) -> None:
+        if self.result is None or self.full_palette_inner is None or not self.full_palette_inner.winfo_exists():
+            return
+        for widget in self.full_palette_inner.winfo_children():
+            widget.destroy()
+        self.full_palette_buttons.clear()
+        query = self.palette_filter_var.get().strip().lower()
+        indices = [
+            idx for idx, color in enumerate(self.result.palette)
+            if not query or query in color.code.lower() or query in color.name.lower()
+        ]
+        indices.sort(key=lambda idx: self._natural_code_key(self.result.palette[idx].code))
+        # 291 色排成 23 列 × 13 行，在常见 1080p 屏幕上可一次看完，
+        # 仍保留滚动条以兼容小屏幕和更大的自定义品牌色板。
+        columns = 23
+        for column in range(columns):
+            self.full_palette_inner.grid_columnconfigure(column, weight=1, uniform="palette")
+        for position, idx in enumerate(indices):
+            color = self.result.palette[idx]
+            selected = idx == self.selected_palette
+            button = tk.Button(
+                self.full_palette_inner,
+                text=color.code,
+                command=lambda i=idx: self._select_from_full_palette(i),
+                bg=self._hex(color.rgb),
+                fg=self._text_hex(color.rgb),
+                activebackground=self._hex(color.rgb),
+                activeforeground=self._text_hex(color.rgb),
+                relief="flat",
+                bd=0,
+                highlightthickness=3,
+                highlightbackground=self.ACCENT if selected else self.BG,
+                highlightcolor=self.ACCENT,
+                font=("Microsoft YaHei UI", 9, "bold"),
+                cursor="hand2",
+                padx=2,
+                pady=4,
+            )
+            button.grid(row=position // columns, column=position % columns, sticky="nsew", padx=3, pady=3)
+            self.full_palette_buttons[idx] = button
+        if not indices:
+            tk.Label(
+                self.full_palette_inner, text="没有匹配的色号", bg=self.BG, fg=self.MUTED,
+                font=("Microsoft YaHei UI", 12), pady=30,
+            ).grid(row=0, column=0, columnspan=columns, sticky="ew")
+
+    def _select_from_full_palette(self, index: int) -> None:
+        self.select_color(index)
+        self._close_full_palette()
+
     def _refresh_palette_selection(self) -> None:
         if self.result is None:
             return
@@ -476,6 +601,8 @@ class ManualEditor:
             children = row.winfo_children()
             if children:
                 children[0].configure(text="✓" if selected else "")
+        for palette_idx, button in self.full_palette_buttons.items():
+            button.configure(highlightbackground=self.ACCENT if palette_idx == self.selected_palette else self.BG)
         color = self.result.palette[self.selected_palette]
         self.current_swatch.configure(bg=self._hex(color.rgb))
         label = color.code if color.name == color.code else f"{color.code}  {color.name}"
@@ -884,6 +1011,13 @@ class ManualEditor:
     @staticmethod
     def _hex(rgb: tuple[int, int, int]) -> str:
         return "#%02X%02X%02X" % rgb
+
+    @staticmethod
+    def _natural_code_key(code: str) -> tuple[str, int, str]:
+        match = re.fullmatch(r"([^0-9]*)([0-9]+)(.*)", code.strip(), re.IGNORECASE)
+        if not match:
+            return code.upper(), -1, ""
+        return match.group(1).upper(), int(match.group(2)), match.group(3).upper()
 
     @staticmethod
     def _text_hex(rgb: tuple[int, int, int]) -> str:
