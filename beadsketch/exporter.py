@@ -149,4 +149,8 @@ def export_bundle(result: PatternResult, folder: str | Path, source_name: str = 
     }
     project.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     outputs.append(project)
+    from .excel_io import export_pattern_xlsx
+    workbook = folder / f"{safe}_editable.xlsx"
+    export_pattern_xlsx(result, workbook)
+    outputs.append(workbook)
     return outputs

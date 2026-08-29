@@ -18,7 +18,8 @@ python main.py
 
 `manual_editor_main.py` 是不依赖图片转换流程的手工拼豆编辑器，内置“原始识别版”与
 “脸型/吊带/右眼调整版”两份 58×57 情侣图纸。它支持左键拖动上色、右键取色、
-橙色高对比选色、整笔撤销/重做、横纵滚动、缩放、JSON 项目保存，以及完整图纸导出。
+橙色高对比选色、完整品牌色板搜索、画笔与矩形选择、整行整列、复制粘贴、批量填色、
+整笔撤销/重做、横纵滚动、缩放、JSON 项目保存，以及完整图纸导出。
 
 源码运行与单文件打包：
 
@@ -28,6 +29,21 @@ pyinstaller --noconfirm --clean MOSAIBeadsManualEditor.spec
 ```
 
 输出为 `dist/MOSAIBeads_Manual_Editor.exe`，具体操作见 `手工编辑器使用说明.md`。
+
+## Excel 双向编辑
+
+所有图纸导出都会额外生成一个 `_editable.xlsx`。工作表中的每个格子同时保存真实拼豆
+色号和用于预览的背景 RGB；隐藏数据页保存品牌、完整色板、原始格子和格式版本。
+因此可以在 Excel 中整行、整列或框选改变背景色，再用独立转换器恢复成图纸：
+
+```powershell
+python excel_converter_main.py
+pyinstaller --noconfirm --clean MOSAIBeadsExcelConverter.spec
+```
+
+输出为 `dist/MOSAIBeads_Excel_Converter.exe`。只改背景色时以背景色为准；只改文字时
+以有效品牌色号为准；两者同时改变但冲突时，以视觉背景色为准并报告冲突。任意 RGB
+使用 CIEDE2000 色差匹配当前品牌色板最接近的实体豆色。
 
 ## V3 界面
 
@@ -83,7 +99,7 @@ pyinstaller --noconfirm --clean MOSAIBeadsManualEditor.spec
 ## 导出内容
 
 “导出图纸”会生成：豆孔成品 PNG、纯像素 PNG、带色号高清 PNG、可打印 PDF、
-用量 CSV 和可编辑 JSON 工程数据。导出目录默认以 `_MOSAIBeads` 结尾。
+用量 CSV、可编辑 JSON 工程数据和可往返编辑的 Excel。导出目录默认以 `_MOSAIBeads` 结尾。
 
 ## 品牌色板
 

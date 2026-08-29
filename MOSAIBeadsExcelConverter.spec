@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['manual_editor_main.py'],
+    ['excel_converter_main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/projects', 'assets/projects'), ('assets/palettes', 'assets/palettes')],
+    datas=[('assets/palettes', 'assets/palettes')],
     hiddenimports=['openpyxl', 'openpyxl.cell._writer'],
     hookspath=[],
     hooksconfig={},
@@ -16,12 +16,8 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='MOSAIBeads_Manual_Editor',
+    pyz, a.scripts, a.binaries, a.datas, [],
+    name='MOSAIBeads_Excel_Converter',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

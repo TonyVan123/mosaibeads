@@ -668,7 +668,7 @@ class BeadSketchApp(tk.Tk):
         out = Path(folder) / initial
         try:
             files = export_bundle(self.result, out, self.source_path.name if self.source_path else "pattern")
-            messagebox.showinfo("导出完成", f"已导出 {len(files)} 个文件：\n{out}\n\n包含成品图、像素图、高清图纸、PDF、用量 CSV 和可编辑工程数据。")
+            messagebox.showinfo("导出完成", f"已导出 {len(files)} 个文件：\n{out}\n\n包含成品图、像素图、高清图纸、PDF、用量 CSV、可编辑工程数据和 Excel。")
             self.status_var.set(f"已导出到：{out}")
         except Exception as exc:
             messagebox.showerror("导出失败", str(exc))

@@ -76,9 +76,10 @@ class PipelineTests(unittest.TestCase):
                                ConvertOptions(width=24, max_colors=9, profile="插画/动漫"))
         with tempfile.TemporaryDirectory() as tmp:
             files = export_bundle(result, tmp, "portrait.png")
-            self.assertEqual(len(files), 6)
+            self.assertEqual(len(files), 7)
             self.assertTrue(all(Path(p).exists() and Path(p).stat().st_size > 20 for p in files))
             self.assertTrue(any(p.suffix == ".pdf" for p in files))
+            self.assertTrue(any(p.suffix == ".xlsx" for p in files))
 
     def test_fixed_palette_is_an_exact_allow_list(self) -> None:
         chosen = [self.palette[i] for i in (0, 12, 35, 70)]

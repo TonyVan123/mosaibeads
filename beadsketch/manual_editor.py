@@ -13,7 +13,7 @@ import numpy as np
 
 from .engine import PatternResult
 from .exporter import export_bundle
-from .palettes import BeadColor, resource_root
+from .palettes import BeadColor, load_palette, resource_root
 
 
 BUILTIN_PROJECTS = {
@@ -54,6 +54,15 @@ def load_project(path: str | Path) -> LoadedProject:
     if int(indices.min()) < 0 or int(indices.max()) >= len(palette):
         raise ValueError("格子中引用了色板范围以外的颜色。")
 
+    brand = str((data.get("metadata") or {}).get("brand_palette") or "MARD 291")
+    seen_codes = {c.code.upper() for c in palette}
+    try:
+        for color in load_palette(brand):
+            if color.code.upper() not in seen_codes:
+                palette.append(color)
+                seen_codes.add(color.code.upper())
+    except Exception:
+        pass
     colors = np.asarray([c.rgb for c in palette], dtype=np.uint8)
     rgb_grid = colors[indices]
     result = PatternResult(
@@ -134,6 +143,9 @@ class ManualEditor:
         self.result: PatternResult | None = None
         self.current_path: Path | None = None
         self.selected_palette = 0
+        self.edit_mode_var = tk.StringVar(value="paint")
+        self.palette_filter_var = tk.StringVar()
+        self.used_only_var = tk.BooleanVar(value=False)
         self.zoom_index = 4
         self.margin = 42
         self.dirty = False
@@ -145,6 +157,12 @@ class ManualEditor:
         self.cell_rects: list[list[int]] = []
         self.cell_texts: list[list[int | None]] = []
         self.palette_rows: list[tk.Frame] = []
+        self.palette_row_indices: list[int] = []
+        self.selection: tuple[int, int, int, int] | None = None
+        self.selection_anchor: tuple[int, int] | None = None
+        self.selection_drag_kind = "cells"
+        self.selection_rect: int | None = None
+        self.clipboard_codes: list[list[str]] = []
 
         self._configure_style()
         self._build_ui()
@@ -197,6 +215,12 @@ class ManualEditor:
         ttk.Button(toolbar, text="↶ 撤销", style="Tool.TButton", command=self.undo).pack(side="left", padx=(0, 5))
         ttk.Button(toolbar, text="↷ 重做", style="Tool.TButton", command=self.redo).pack(side="left", padx=5)
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
+        ttk.Radiobutton(toolbar, text="画笔", variable=self.edit_mode_var, value="paint", command=self._mode_changed).pack(side="left", padx=3)
+        ttk.Radiobutton(toolbar, text="矩形选择", variable=self.edit_mode_var, value="select", command=self._mode_changed).pack(side="left", padx=3)
+        ttk.Button(toolbar, text="填充选区", style="Accent.TButton", command=self.fill_selection).pack(side="left", padx=(7, 3))
+        ttk.Button(toolbar, text="整行", style="Tool.TButton", command=self.select_whole_row).pack(side="left", padx=3)
+        ttk.Button(toolbar, text="整列", style="Tool.TButton", command=self.select_whole_column).pack(side="left", padx=3)
+        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
         ttk.Button(toolbar, text="－", width=3, style="Tool.TButton", command=lambda: self.change_zoom(-1)).pack(side="left")
         self.zoom_label = ttk.Label(toolbar, text="24 px/格", style="Panel.TLabel", width=10, anchor="center")
         self.zoom_label.pack(side="left", padx=5)
@@ -204,7 +228,7 @@ class ManualEditor:
         ttk.Button(toolbar, text="适合窗口", style="Tool.TButton", command=self.fit_view).pack(side="left", padx=(7, 0))
         ttk.Label(
             toolbar,
-            text="左键拖动上色  ·  右键取色  ·  滚轮上下  ·  Shift+滚轮左右",
+            text="画笔拖动上色 · 选择模式框选 · 右键取色 · 滚轮移动",
             style="Panel.TLabel",
         ).pack(side="right", padx=8)
 
@@ -224,9 +248,9 @@ class ManualEditor:
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.v_scroll.grid(row=0, column=1, sticky="ns")
         self.h_scroll.grid(row=1, column=0, sticky="ew")
-        self.canvas.bind("<ButtonPress-1>", self._begin_stroke)
-        self.canvas.bind("<B1-Motion>", self._continue_stroke)
-        self.canvas.bind("<ButtonRelease-1>", self._end_stroke)
+        self.canvas.bind("<ButtonPress-1>", self._left_press)
+        self.canvas.bind("<B1-Motion>", self._left_motion)
+        self.canvas.bind("<ButtonRelease-1>", self._left_release)
         self.canvas.bind("<Button-3>", self._pick_color)
         self.canvas.bind("<MouseWheel>", self._mousewheel)
         self.canvas.bind("<Shift-MouseWheel>", self._shift_mousewheel)
@@ -247,7 +271,16 @@ class ManualEditor:
         self.summary_label = tk.Label(info, text="", bg=self.PANEL, fg=self.MUTED, justify="left", anchor="w", font=("Microsoft YaHei UI", 9))
         self.summary_label.pack(fill="x")
 
-        tk.Label(side, text="项目色板（点击选择）", bg=self.PANEL, fg=self.TEXT, font=("Microsoft YaHei UI", 11, "bold"), padx=14, pady=8).pack(fill="x", anchor="w")
+        tk.Label(side, text="完整品牌色板（点击选择）", bg=self.PANEL, fg=self.TEXT, font=("Microsoft YaHei UI", 11, "bold"), padx=14, pady=8).pack(fill="x", anchor="w")
+        palette_tools = tk.Frame(side, bg=self.PANEL, padx=12, pady=3)
+        palette_tools.pack(fill="x")
+        search = tk.Entry(palette_tools, textvariable=self.palette_filter_var, bg="#F7F9FC", fg="#111827", font=("Microsoft YaHei UI", 9))
+        search.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=4)
+        search.insert(0, "")
+        self.palette_filter_var.trace_add("write", lambda *_args: self._render_palette())
+        tk.Checkbutton(palette_tools, text="只看已用", variable=self.used_only_var, command=self._render_palette,
+                       bg=self.PANEL, fg=self.TEXT, selectcolor=self.PANEL_2, activebackground=self.PANEL,
+                       activeforeground=self.TEXT, font=("Microsoft YaHei UI", 9)).pack(side="right")
         palette_holder = tk.Frame(side, bg=self.PANEL)
         palette_holder.pack(fill="both", expand=True, padx=(8, 2), pady=(0, 8))
         self.palette_canvas = tk.Canvas(palette_holder, bg=self.PANEL, highlightthickness=0)
@@ -273,6 +306,10 @@ class ManualEditor:
         self.root.bind_all("<Control-o>", lambda _e: self.open_project())
         self.root.bind_all("<Control-plus>", lambda _e: self.change_zoom(1))
         self.root.bind_all("<Control-minus>", lambda _e: self.change_zoom(-1))
+        self.root.bind_all("<Control-c>", lambda _e: self.copy_selection())
+        self.root.bind_all("<Control-v>", lambda _e: self.paste_selection())
+        self.root.bind_all("<Control-a>", lambda _e: self.select_all())
+        self.root.bind_all("<Return>", lambda _e: self.fill_selection())
 
     def _on_version_selected(self, _event: tk.Event | None = None) -> None:
         if self._loading_version:
@@ -313,6 +350,8 @@ class ManualEditor:
         self.result = loaded.result
         self.current_path = None
         self.selected_palette = 0
+        self.selection = None
+        self.selection_anchor = None
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.dirty = False
@@ -395,15 +434,22 @@ class ManualEditor:
         self.canvas.xview_moveto(max(0.0, min(1.0, center_ratio[0] - self.canvas.winfo_width() / max(1, total_w) / 2)))
         self.canvas.yview_moveto(max(0.0, min(1.0, center_ratio[1] - self.canvas.winfo_height() / max(1, total_h) / 2)))
         self.zoom_label.configure(text=f"{cell} px/格")
+        self._draw_selection()
 
     def _render_palette(self) -> None:
         for widget in self.palette_inner.winfo_children():
             widget.destroy()
         self.palette_rows.clear()
+        self.palette_row_indices.clear()
         if self.result is None:
             return
         counts = {color.code: count for color, count in self.result.counts()}
+        query = self.palette_filter_var.get().strip().lower()
         for idx, color in enumerate(self.result.palette):
+            if self.used_only_var.get() and counts.get(color.code, 0) == 0:
+                continue
+            if query and query not in color.code.lower() and query not in color.name.lower():
+                continue
             frame = tk.Frame(self.palette_inner, bg=self.PANEL_2, highlightthickness=3, highlightbackground=self.PANEL, padx=6, pady=5)
             frame.pack(fill="x", padx=5, pady=3)
             mark = tk.Label(frame, text="✓" if idx == self.selected_palette else "", width=2, bg=self.PANEL_2, fg=self.ACCENT, font=("Arial", 14, "bold"))
@@ -418,13 +464,14 @@ class ManualEditor:
                 widget.bind("<Button-1>", lambda _e, i=idx: self.select_color(i))
                 widget.bind("<MouseWheel>", lambda e: self.palette_canvas.yview_scroll(-int(e.delta / 120), "units"))
             self.palette_rows.append(frame)
+            self.palette_row_indices.append(idx)
         self._refresh_palette_selection()
 
     def _refresh_palette_selection(self) -> None:
         if self.result is None:
             return
-        for idx, row in enumerate(self.palette_rows):
-            selected = idx == self.selected_palette
+        for row, palette_idx in zip(self.palette_rows, self.palette_row_indices):
+            selected = palette_idx == self.selected_palette
             row.configure(highlightbackground=self.ACCENT if selected else self.PANEL, bg=self.PANEL_2)
             children = row.winfo_children()
             if children:
@@ -442,6 +489,30 @@ class ManualEditor:
         color = self.result.palette[index]
         self.status_var.set(f"已选择 {color.code} · {color.name}；现在可在图纸上按住左键拖动上色。")
 
+    def _mode_changed(self) -> None:
+        mode = self.edit_mode_var.get()
+        self.canvas.configure(cursor="crosshair" if mode == "paint" else "tcross")
+        self.status_var.set("画笔模式：左键拖动上色。" if mode == "paint" else "选择模式：拖动框选，点击行号/列号可选整行/整列。")
+
+    def _left_press(self, event: tk.Event) -> None:
+        if self.edit_mode_var.get() == "paint":
+            self._begin_stroke(event)
+        else:
+            self._begin_selection(event)
+
+    def _left_motion(self, event: tk.Event) -> None:
+        if self.edit_mode_var.get() == "paint":
+            self._continue_stroke(event)
+        else:
+            self._continue_selection(event)
+
+    def _left_release(self, event: tk.Event) -> None:
+        if self.edit_mode_var.get() == "paint":
+            self._end_stroke(event)
+        else:
+            self._continue_selection(event)
+            self._selection_status()
+
     def _canvas_cell(self, event: tk.Event) -> tuple[int, int] | None:
         if self.result is None:
             return None
@@ -451,6 +522,169 @@ class ManualEditor:
         if 0 <= x < self.result.width and 0 <= y < self.result.height:
             return x, y
         return None
+
+    def _begin_selection(self, event: tk.Event) -> None:
+        if self.result is None:
+            return
+        px, py = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        x = math.floor((px - self.margin) / self.cell)
+        y = math.floor((py - self.margin) / self.cell)
+        if px < self.margin and 0 <= y < self.result.height:
+            self.selection_drag_kind = "rows"
+            self.selection_anchor = (0, y)
+            self.selection = (0, y, self.result.width - 1, y)
+        elif py < self.margin and 0 <= x < self.result.width:
+            self.selection_drag_kind = "cols"
+            self.selection_anchor = (x, 0)
+            self.selection = (x, 0, x, self.result.height - 1)
+        else:
+            pos = self._canvas_cell(event)
+            if pos is None:
+                return
+            self.selection_drag_kind = "cells"
+            self.selection_anchor = pos
+            self.selection = (*pos, *pos)
+        self._draw_selection()
+
+    def _continue_selection(self, event: tk.Event) -> None:
+        if self.result is None or self.selection_anchor is None:
+            return
+        px, py = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        x = max(0, min(self.result.width - 1, math.floor((px - self.margin) / self.cell)))
+        y = max(0, min(self.result.height - 1, math.floor((py - self.margin) / self.cell)))
+        ax, ay = self.selection_anchor
+        if self.selection_drag_kind == "rows":
+            self.selection = (0, min(ay, y), self.result.width - 1, max(ay, y))
+        elif self.selection_drag_kind == "cols":
+            self.selection = (min(ax, x), 0, max(ax, x), self.result.height - 1)
+        else:
+            self.selection = (min(ax, x), min(ay, y), max(ax, x), max(ay, y))
+        self._draw_selection()
+
+    def _draw_selection(self) -> None:
+        if self.selection_rect is not None:
+            self.canvas.delete(self.selection_rect)
+            self.selection_rect = None
+        if self.selection is None:
+            return
+        x0, y0, x1, y1 = self.selection
+        self.selection_rect = self.canvas.create_rectangle(
+            self.margin + x0 * self.cell - 1,
+            self.margin + y0 * self.cell - 1,
+            self.margin + (x1 + 1) * self.cell + 1,
+            self.margin + (y1 + 1) * self.cell + 1,
+            outline="#1687FF", width=4,
+        )
+        self.canvas.tag_raise(self.selection_rect)
+
+    def _selection_status(self) -> None:
+        if self.selection is None:
+            return
+        x0, y0, x1, y1 = self.selection
+        count = (x1 - x0 + 1) * (y1 - y0 + 1)
+        self.status_var.set(f"已选择：第 {x0 + 1}–{x1 + 1} 列，第 {y0 + 1}–{y1 + 1} 行，共 {count} 格。按 Enter 可填色。")
+
+    def select_all(self) -> None:
+        if self.result is None:
+            return
+        self.edit_mode_var.set("select")
+        self.selection = (0, 0, self.result.width - 1, self.result.height - 1)
+        self.selection_anchor = (0, 0)
+        self._draw_selection()
+        self._selection_status()
+
+    def select_whole_row(self) -> None:
+        if self.result is None:
+            return
+        y0 = self.selection[1] if self.selection else 0
+        y1 = self.selection[3] if self.selection else y0
+        self.edit_mode_var.set("select")
+        self.selection = (0, y0, self.result.width - 1, y1)
+        self._draw_selection()
+        self._selection_status()
+
+    def select_whole_column(self) -> None:
+        if self.result is None:
+            return
+        x0 = self.selection[0] if self.selection else 0
+        x1 = self.selection[2] if self.selection else x0
+        self.edit_mode_var.set("select")
+        self.selection = (x0, 0, x1, self.result.height - 1)
+        self._draw_selection()
+        self._selection_status()
+
+    def fill_selection(self) -> None:
+        if self.result is None or self.selection is None:
+            self.status_var.set("请先切换到矩形选择模式并选中格子。")
+            return
+        x0, y0, x1, y1 = self.selection
+        changes: list[tuple[int, int, int, int]] = []
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                old = int(self.result.indices[y, x])
+                if old != self.selected_palette:
+                    self.result.indices[y, x] = self.selected_palette
+                    changes.append((x, y, old, self.selected_palette))
+                    self._update_cell(x, y)
+        self._commit_changes(changes, "已批量填充")
+
+    def _commit_changes(self, changes: list[tuple[int, int, int, int]], message: str) -> None:
+        if not changes:
+            self.status_var.set("所选格子已经是当前颜色。")
+            return
+        self.undo_stack.append(changes)
+        self.redo_stack.clear()
+        self._mark_dirty()
+        self._refresh_summary()
+        self._render_palette()
+        self._draw_selection()
+        self.status_var.set(f"{message} {len(changes)} 格；Ctrl+Z 可撤销。")
+
+    def copy_selection(self) -> None:
+        if self.result is None or self.selection is None:
+            return
+        x0, y0, x1, y1 = self.selection
+        rows = [[self.result.palette[int(self.result.indices[y, x])].code for x in range(x0, x1 + 1)] for y in range(y0, y1 + 1)]
+        self.clipboard_codes = rows
+        text = "\n".join("\t".join(row) for row in rows)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.status_var.set(f"已复制 {(x1 - x0 + 1) * (y1 - y0 + 1)} 格，可粘贴到本软件或 Excel。")
+
+    def paste_selection(self) -> None:
+        if self.result is None:
+            return
+        rows = self.clipboard_codes
+        try:
+            text = self.root.clipboard_get()
+            parsed = [line.split("\t") for line in text.replace("\r", "").split("\n") if line]
+            if parsed:
+                rows = parsed
+        except tk.TclError:
+            pass
+        if not rows:
+            return
+        start_x, start_y = (self.selection[0], self.selection[1]) if self.selection else (0, 0)
+        code_map = {c.code.upper(): i for i, c in enumerate(self.result.palette)}
+        changes: list[tuple[int, int, int, int]] = []
+        skipped = 0
+        for dy, row in enumerate(rows):
+            for dx, code in enumerate(row):
+                x, y = start_x + dx, start_y + dy
+                if x >= self.result.width or y >= self.result.height:
+                    continue
+                new = code_map.get(str(code).strip().upper())
+                if new is None:
+                    skipped += 1
+                    continue
+                old = int(self.result.indices[y, x])
+                if old != new:
+                    self.result.indices[y, x] = new
+                    changes.append((x, y, old, new))
+                    self._update_cell(x, y)
+        self._commit_changes(changes, "已粘贴")
+        if skipped:
+            self.status_var.set(self.status_var.get() + f"；跳过 {skipped} 个未知色号。")
 
     def _begin_stroke(self, event: tk.Event) -> None:
         self._stroke = {}
@@ -630,7 +864,7 @@ class ManualEditor:
             return
         safe_name = self.current_path.stem if self.current_path else "couple_58x57_manual"
         output_dir = Path(folder) / f"{safe_name}_图纸"
-        self.status_var.set("正在导出 PNG、PDF、材料表和项目文件……")
+        self.status_var.set("正在导出 PNG、PDF、材料表、项目文件和 Excel……")
         self.root.update_idletasks()
         try:
             outputs = export_bundle(self.result, output_dir, safe_name)
@@ -671,5 +905,5 @@ def smoke_test() -> None:
             raise RuntimeError(f"{label} 的尺寸不是 58×57")
         if sum(count for _color, count in result.counts()) != 3306:
             raise RuntimeError(f"{label} 的豆数无效")
-        if len(result.palette) != 19:
-            raise RuntimeError(f"{label} 的内置色板不是 19 色")
+        if len(result.palette) < 291:
+            raise RuntimeError(f"{label} 没有加载完整的 MARD 291 品牌色板")
